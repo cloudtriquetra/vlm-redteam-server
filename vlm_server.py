@@ -36,7 +36,13 @@ log = logging.getLogger(__name__)
 
 # ── Device ────────────────────────────────────────────────────────────────────
 
-DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+#DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
+if torch.backends.mps.is_available():
+    DEVICE = torch.device("mps")       # Apple Silicon
+elif torch.cuda.is_available():
+    DEVICE = torch.device("cuda")      # EC2 GPU
+else:
+    DEVICE = torch.device("cpu")       # EC2 CPU / fallback
 log.info(f"Device: {DEVICE}")
 
 # ── Registry ──────────────────────────────────────────────────────────────────
