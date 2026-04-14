@@ -230,11 +230,21 @@ def decode_image(b64: str) -> Image.Image:
     return Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
 
 
-def decode_audio(b64: str):
-    """Decode base64 audio and return (audio_array, sample_rate)."""
-    import soundfile as sf
+def decode_audio(b64: str, target_sr: int = 16000):
+    """
+    Decode base64 audio and return (audio_array, sample_rate).
+    Auto-resamples to target_sr (default 16000 Hz for Whisper/Wav2Vec2).
+    Handles WAV, MP3, FLAC, OGG, M4A via librosa.
+    """
+    import librosa
     audio_bytes = base64.b64decode(b64)
-    audio_array, sample_rate = sf.read(io.BytesIO(audio_bytes))
+    # librosa handles all formats and resamples in one step
+    audio_array, sample_rate = librosa.load(
+        io.BytesIO(audio_bytes),
+        sr=target_sr,   # resample to target on load
+        mono=True,      # convert stereo to mono
+    )
+    log.info(f"Audio decoded — sr={sample_rate}Hz, duration={len(audio_array)/sample_rate:.1f}s")
     return audio_array, sample_rate
 
 
