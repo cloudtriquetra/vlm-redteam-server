@@ -1,0 +1,77 @@
+models:
+
+  # ── HuggingFace Hub ───────────────────────────────────────────────────────
+  # Models are downloaded automatically on first request and cached locally.
+
+  trocr-base-printed:
+    source: hf
+    repo: microsoft/trocr-base-printed
+    task: ocr
+    description: Printed text OCR (0.3B) — good default for testing
+
+  trocr-large-printed:
+    source: hf
+    repo: microsoft/trocr-large-printed
+    task: ocr
+    description: Printed text OCR large (0.7B)
+
+  trocr-base-handwritten:
+    source: hf
+    repo: microsoft/trocr-base-handwritten
+    task: ocr
+    description: Handwritten text OCR (0.3B)
+
+  blip-base:
+    source: hf
+    repo: Salesforce/blip-image-captioning-base
+    task: captioning
+    description: Image captioning base (0.4B)
+
+  blip-large:
+    source: hf
+    repo: Salesforce/blip-image-captioning-large
+    task: captioning
+    description: Image captioning large (1B)
+
+  git-base:
+    source: hf
+    repo: microsoft/git-base
+    task: captioning
+    description: Generative image to text (0.7B)
+
+  vilt-vqa:
+    source: hf
+    repo: dandelin/vilt-b32-finetuned-vqa
+    task: vqa
+    description: Visual question answering
+
+  # ── Local folder ──────────────────────────────────────────────────────────
+  # Uncomment and set path to load a model saved on disk.
+  # The folder must contain config.json + model weights (safetensors or bin).
+  #
+  # my-custom-model:
+  #   source: local
+  #   path: /absolute/path/to/model/folder
+  #   task: ocr          # ocr | captioning | vqa
+  #   description: My locally trained model
+
+  # ── URL download ──────────────────────────────────────────────────────────
+  # Server downloads and extracts the archive on first load.
+  # Supports .zip and .tar.gz
+  #
+  # partner-model:
+  #   source: url
+  #   url: https://example.com/models/my-model-v1.zip
+  #   task: captioning
+  #   description: Model from partner team
+
+  # ── AWS S3 ────────────────────────────────────────────────────────────────
+  # Requires: pip install boto3
+  # Requires: AWS credentials configured (aws configure or env vars)
+  #
+  # internal-model:
+  #   source: s3
+  #   bucket: my-ml-models-bucket
+  #   key: models/internal-vlm-v2.tar.gz
+  #   task: captioning
+  #   description: Internal model from S3
