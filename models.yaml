@@ -75,3 +75,28 @@ models:
   #   key: models/internal-vlm-v2.tar.gz
   #   task: captioning
   #   description: Internal model from S3
+
+  # ── Audio models ──────────────────────────────────────────────────────────
+  whisper-base:
+    source: hf
+    repo: openai/whisper-base
+    task: speech-to-text
+    description: Speech recognition (74M)
+
+  whisper-small:
+    source: hf
+    repo: openai/whisper-small
+    task: speech-to-text
+    description: Speech recognition (244M)
+
+  wav2vec2-base:
+    source: hf
+    repo: facebook/wav2vec2-base-960h
+    task: speech-to-text
+    description: Speech recognition (95M)
+
+  audio-classifier:
+    source: hf
+    repo: MIT/ast-finetuned-audioset-10-10-0.4593
+    task: audio-classification
+    description: Audio event classification
