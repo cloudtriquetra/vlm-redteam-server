@@ -233,6 +233,31 @@ pip install boto3
 aws configure   # or set AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY env vars
 ```
 
+### Pipeline kwargs — model-specific inference options
+
+Some models need extra arguments passed to the pipeline at inference time. Add a `pipeline_kwargs` block to any model entry in `models.yaml` — no Python changes needed:
+
+```yaml
+whisper-base:
+  source: hf
+  repo: openai/whisper-base
+  task: automatic-speech-recognition
+  description: Speech recognition (74M)
+  pipeline_kwargs:
+    return_timestamps: true   # required for audio longer than 30 seconds
+    language: en              # skip language detection, faster for English audio
+
+blip-base:
+  source: hf
+  repo: Salesforce/blip-image-captioning-base
+  task: image-to-text
+  description: Image captioning base (0.4B)
+  pipeline_kwargs:
+    max_new_tokens: 64        # prevents repetition loops on long captions
+```
+
+Any key-value pair under `pipeline_kwargs` is passed directly to the HuggingFace pipeline call. Check the model's HuggingFace page for supported parameters.
+
 ### Custom loader fallback
 
 Most models load automatically via HuggingFace `pipeline()`. For rare models that need non-standard loading, add `custom_loader: true` and use the legacy task name:
@@ -348,6 +373,20 @@ pip install accelerate
 **transformers version conflict**
 ```bash
 pip install "transformers>=4.40.0,<5.0.0" --force-reinstall
+```
+
+**Whisper error: more than 3000 mel input features**
+Audio longer than 30 seconds requires `return_timestamps: true`. Add it to the model's `pipeline_kwargs` in `models.yaml`:
+```yaml
+pipeline_kwargs:
+  return_timestamps: true
+```
+
+**BLIP / image-to-text repeating output**
+The model is looping without a stopping condition. Add `max_new_tokens` to the model's `pipeline_kwargs` in `models.yaml`:
+```yaml
+pipeline_kwargs:
+  max_new_tokens: 64
 ```
 
 **Audio sample rate error**
