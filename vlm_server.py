@@ -181,16 +181,21 @@ def load_model(model_key: str) -> tuple:
         model     = VisionEncoderDecoderModel.from_pretrained(model_path).to(DEVICE)
 
     elif task == "captioning":
-        from transformers import (
-            BlipProcessor, BlipForConditionalGeneration,
-            AutoProcessor, AutoModelForVision2Seq,
-        )
+        from transformers import BlipProcessor, BlipForConditionalGeneration
         try:
             processor = BlipProcessor.from_pretrained(model_path)
             model     = BlipForConditionalGeneration.from_pretrained(model_path).to(DEVICE)
         except Exception:
+            # Fallback for non-BLIP captioning models (GIT, etc.)
+            # Try AutoModelForVision2Seq (transformers <5) then AutoModelForCausalLM (transformers 5+)
+            from transformers import AutoProcessor
             processor = AutoProcessor.from_pretrained(model_path)
-            model     = AutoModelForVision2Seq.from_pretrained(model_path).to(DEVICE)
+            try:
+                from transformers import AutoModelForVision2Seq
+                model = AutoModelForVision2Seq.from_pretrained(model_path).to(DEVICE)
+            except ImportError:
+                from transformers import AutoModelForCausalLM
+                model = AutoModelForCausalLM.from_pretrained(model_path).to(DEVICE)
 
     elif task == "vqa":
         from transformers import ViltProcessor, ViltForQuestionAnswering
@@ -220,9 +225,21 @@ def render_text_as_image(text: str) -> Image.Image:
     from PIL import ImageDraw, ImageFont
     img  = Image.new("RGB", (600, 80), "white")
     draw = ImageDraw.Draw(img)
-    try:
-        font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 32)
-    except Exception:
+    font_candidates = [
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
+    ]
+    font = None
+    for candidate in font_candidates:
+        try:
+            font = ImageFont.truetype(candidate, 32)
+            break
+        except Exception:
+            continue
+    if font is None:
         font = ImageFont.load_default()
     draw.text((10, 20), text, fill="black", font=font)
     return img
