@@ -238,10 +238,11 @@ def decode_audio(b64: str, target_sr: int = 16000):
     """
     import librosa
     audio_bytes = base64.b64decode(b64)
+    # librosa handles all formats and resamples in one step
     audio_array, sample_rate = librosa.load(
         io.BytesIO(audio_bytes),
-        sr=target_sr,
-        mono=True,
+        sr=target_sr,   # resample to target on load
+        mono=True,      # convert stereo to mono
     )
     log.info(f"Audio decoded — sr={sample_rate}Hz, duration={len(audio_array)/sample_rate:.1f}s")
     return audio_array, sample_rate
@@ -317,6 +318,7 @@ def list_models():
 
 @app.post("/inference", response_model=InferenceResponse, summary="Run inference")
 async def infer(req: InferenceRequest):
+    # Load model (from cache or fresh)
     try:
         processor, model, task = load_model(req.model)
     except ValueError as e:
@@ -325,6 +327,7 @@ async def infer(req: InferenceRequest):
         log.error(f"Model load error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+    # Run inference
     try:
         with torch.no_grad():
 
