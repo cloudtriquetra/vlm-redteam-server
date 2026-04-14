@@ -1,7 +1,7 @@
 """
-vlm_server.py — Universal VLM inference server
+vlm_server.py — Universal AI inference server
 ================================================
-Hosts any Vision-Language Model behind a unified FastAPI endpoint.
+Hosts any Vision-Language or Audio Model behind a unified FastAPI endpoint.
 Supports HuggingFace Hub, local folders, URL downloads, and AWS S3.
 
 Usage:
@@ -36,7 +36,6 @@ log = logging.getLogger(__name__)
 
 # ── Device ────────────────────────────────────────────────────────────────────
 
-#DEVICE = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 if torch.backends.mps.is_available():
     DEVICE = torch.device("mps")       # Apple Silicon
 elif torch.cuda.is_available():
@@ -74,7 +73,6 @@ def _extract_archive(archive_path: str, dest: Path) -> str:
 
     os.unlink(archive_path)
 
-    # If archive contained a single subfolder, use that as root
     contents = list(dest.iterdir())
     if len(contents) == 1 and contents[0].is_dir():
         return str(contents[0])
@@ -175,6 +173,8 @@ def load_model(model_key: str) -> tuple:
 
     log.info(f"[{model_key}] Loading (task={task}) ...")
 
+    # ── Vision tasks ──────────────────────────────────────────────────────────
+
     if task == "ocr":
         from transformers import TrOCRProcessor, VisionEncoderDecoderModel
         processor = TrOCRProcessor.from_pretrained(model_path)
@@ -186,8 +186,6 @@ def load_model(model_key: str) -> tuple:
             processor = BlipProcessor.from_pretrained(model_path)
             model     = BlipForConditionalGeneration.from_pretrained(model_path).to(DEVICE)
         except Exception:
-            # Fallback for non-BLIP captioning models (GIT, etc.)
-            # Try AutoModelForVision2Seq (transformers <5) then AutoModelForCausalLM (transformers 5+)
             from transformers import AutoProcessor
             processor = AutoProcessor.from_pretrained(model_path)
             try:
@@ -202,10 +200,22 @@ def load_model(model_key: str) -> tuple:
         processor = ViltProcessor.from_pretrained(model_path)
         model     = ViltForQuestionAnswering.from_pretrained(model_path).to(DEVICE)
 
+    # ── Audio tasks ───────────────────────────────────────────────────────────
+
+    elif task == "speech-to-text":
+        from transformers import WhisperProcessor, WhisperForConditionalGeneration
+        processor = WhisperProcessor.from_pretrained(model_path)
+        model     = WhisperForConditionalGeneration.from_pretrained(model_path).to(DEVICE)
+
+    elif task == "audio-classification":
+        from transformers import AutoFeatureExtractor, AutoModelForAudioClassification
+        processor = AutoFeatureExtractor.from_pretrained(model_path)
+        model     = AutoModelForAudioClassification.from_pretrained(model_path).to(DEVICE)
+
     else:
         raise ValueError(
             f"[{model_key}] Unsupported task: '{task}'. "
-            "Must be one of: ocr | captioning | vqa"
+            "Must be one of: ocr | captioning | vqa | speech-to-text | audio-classification"
         )
 
     model.eval()
@@ -218,6 +228,14 @@ def load_model(model_key: str) -> tuple:
 
 def decode_image(b64: str) -> Image.Image:
     return Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
+
+
+def decode_audio(b64: str):
+    """Decode base64 audio and return (audio_array, sample_rate)."""
+    import soundfile as sf
+    audio_bytes = base64.b64decode(b64)
+    audio_array, sample_rate = sf.read(io.BytesIO(audio_bytes))
+    return audio_array, sample_rate
 
 
 def render_text_as_image(text: str) -> Image.Image:
@@ -248,15 +266,16 @@ def render_text_as_image(text: str) -> Image.Image:
 # ── FastAPI app ───────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="Universal VLM Server",
-    description="Host any Vision-Language Model and expose it for inference and red teaming.",
-    version="1.0.0",
+    title="Universal AI Red Team Server",
+    description="Host any Vision-Language or Audio Model and expose it for inference and red teaming.",
+    version="2.0.0",
 )
 
 
 class InferenceRequest(BaseModel):
     model:        str
-    image_base64: str | None = None   # base64-encoded image (preferred)
+    image_base64: str | None = None   # vision models — base64 image
+    audio_base64: str | None = None   # audio models  — base64 WAV/MP3
     prompt:       str | None = None   # text prompt / question
 
 
@@ -298,47 +317,70 @@ async def infer(req: InferenceRequest):
         log.error(f"Model load error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-    # Build input image
-    try:
-        if req.image_base64:
-            image = decode_image(req.image_base64)
-        elif req.prompt and task == "ocr":
-            image = render_text_as_image(req.prompt)
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Provide 'image_base64'. "
-                    "OCR models also accept a plain 'prompt' text for smoke testing."
-                ),
-            )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Image decode error: {e}")
-
     # Run inference
     try:
         with torch.no_grad():
 
+            # ── Vision ────────────────────────────────────────────────────────
+
             if task == "ocr":
+                if req.image_base64:
+                    image = decode_image(req.image_base64)
+                elif req.prompt:
+                    image = render_text_as_image(req.prompt)
+                else:
+                    raise HTTPException(status_code=400,
+                        detail="OCR requires 'image_base64' or 'prompt'.")
                 px  = processor(image, return_tensors="pt").pixel_values.to(DEVICE)
                 ids = model.generate(px)
                 out = processor.batch_decode(ids, skip_special_tokens=True)[0]
 
             elif task == "captioning":
+                if not req.image_base64:
+                    raise HTTPException(status_code=400,
+                        detail="Captioning requires 'image_base64'.")
+                image  = decode_image(req.image_base64)
                 inputs = processor(image, req.prompt or "", return_tensors="pt")
                 inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
                 ids    = model.generate(**inputs, max_new_tokens=64)
                 out    = processor.decode(ids[0], skip_special_tokens=True)
 
             elif task == "vqa":
-                if not req.prompt:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="VQA task requires a 'prompt' question field.",
-                    )
+                if not req.image_base64 or not req.prompt:
+                    raise HTTPException(status_code=400,
+                        detail="VQA requires both 'image_base64' and 'prompt'.")
+                image  = decode_image(req.image_base64)
                 inputs = processor(image, req.prompt, return_tensors="pt")
+                inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
+                logits = model(**inputs).logits
+                out    = model.config.id2label[logits.argmax(-1).item()]
+
+            # ── Audio ─────────────────────────────────────────────────────────
+
+            elif task == "speech-to-text":
+                if not req.audio_base64:
+                    raise HTTPException(status_code=400,
+                        detail="speech-to-text requires 'audio_base64'.")
+                audio_array, sample_rate = decode_audio(req.audio_base64)
+                inputs = processor(
+                    audio_array,
+                    sampling_rate=sample_rate,
+                    return_tensors="pt"
+                )
+                inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
+                ids    = model.generate(**inputs)
+                out    = processor.batch_decode(ids, skip_special_tokens=True)[0]
+
+            elif task == "audio-classification":
+                if not req.audio_base64:
+                    raise HTTPException(status_code=400,
+                        detail="audio-classification requires 'audio_base64'.")
+                audio_array, sample_rate = decode_audio(req.audio_base64)
+                inputs = processor(
+                    audio_array,
+                    sampling_rate=sample_rate,
+                    return_tensors="pt"
+                )
                 inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
                 logits = model(**inputs).logits
                 out    = model.config.id2label[logits.argmax(-1).item()]
