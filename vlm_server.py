@@ -385,12 +385,12 @@ async def infer(req: InferenceRequest):
 
                 elif task in AUDIO_TASKS:
                     if not req.audio_base64:
-                        raise HTTPException(400, f"'{task}' requires 'audio_base64'.")
-                    audio_array, sample_rate = decode_audio(req.audio_base64)
-                    out = _extract_output(
-                        pipe({"array": audio_array, "sampling_rate": sample_rate})
-                    )
-
+        raise HTTPException(400, f"'{task}' requires 'audio_base64'.")
+    audio_array, sample_rate = decode_audio(req.audio_base64)
+    kwargs = REGISTRY[req.model].get("pipeline_kwargs", {})
+    out = _extract_output(
+        pipe({"array": audio_array, "sampling_rate": sample_rate}, **kwargs)
+    )
                 else:
                     raise HTTPException(400,
                         f"Task '{task}' not in IMAGE_TASKS or AUDIO_TASKS. "
