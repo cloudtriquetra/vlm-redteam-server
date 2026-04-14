@@ -238,11 +238,10 @@ def decode_audio(b64: str, target_sr: int = 16000):
     """
     import librosa
     audio_bytes = base64.b64decode(b64)
-    # librosa handles all formats and resamples in one step
     audio_array, sample_rate = librosa.load(
         io.BytesIO(audio_bytes),
-        sr=target_sr,   # resample to target on load
-        mono=True,      # convert stereo to mono
+        sr=target_sr,
+        mono=True,
     )
     log.info(f"Audio decoded — sr={sample_rate}Hz, duration={len(audio_array)/sample_rate:.1f}s")
     return audio_array, sample_rate
@@ -296,114 +295,4 @@ class InferenceResponse(BaseModel):
     device: str
 
 
-# ── Endpoints ─────────────────────────────────────────────────────────────────
-
-@app.get("/health", summary="Health check")
-def health():
-    return {"status": "ok", "device": str(DEVICE)}
-
-
-@app.get("/models", summary="List all registered models")
-def list_models():
-    return {
-        key: {
-            "source":      val.get("source", "hf"),
-            "task":        val["task"],
-            "description": val.get("description", ""),
-            "loaded":      key in CACHE,
-        }
-        for key, val in REGISTRY.items()
-    }
-
-
-@app.post("/inference", response_model=InferenceResponse, summary="Run inference")
-async def infer(req: InferenceRequest):
-    # Load model (from cache or fresh)
-    try:
-        processor, model, task = load_model(req.model)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        log.error(f"Model load error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-    # Run inference
-    try:
-        with torch.no_grad():
-
-            # ── Vision ────────────────────────────────────────────────────────
-
-            if task == "ocr":
-                if req.image_base64:
-                    image = decode_image(req.image_base64)
-                elif req.prompt:
-                    image = render_text_as_image(req.prompt)
-                else:
-                    raise HTTPException(status_code=400,
-                        detail="OCR requires 'image_base64' or 'prompt'.")
-                px  = processor(image, return_tensors="pt").pixel_values.to(DEVICE)
-                ids = model.generate(px)
-                out = processor.batch_decode(ids, skip_special_tokens=True)[0]
-
-            elif task == "captioning":
-                if not req.image_base64:
-                    raise HTTPException(status_code=400,
-                        detail="Captioning requires 'image_base64'.")
-                image  = decode_image(req.image_base64)
-                inputs = processor(image, req.prompt or "", return_tensors="pt")
-                inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
-                ids    = model.generate(**inputs, max_new_tokens=64)
-                out    = processor.decode(ids[0], skip_special_tokens=True)
-
-            elif task == "vqa":
-                if not req.image_base64 or not req.prompt:
-                    raise HTTPException(status_code=400,
-                        detail="VQA requires both 'image_base64' and 'prompt'.")
-                image  = decode_image(req.image_base64)
-                inputs = processor(image, req.prompt, return_tensors="pt")
-                inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
-                logits = model(**inputs).logits
-                out    = model.config.id2label[logits.argmax(-1).item()]
-
-            # ── Audio ─────────────────────────────────────────────────────────
-
-            elif task == "speech-to-text":
-                if not req.audio_base64:
-                    raise HTTPException(status_code=400,
-                        detail="speech-to-text requires 'audio_base64'.")
-                audio_array, sample_rate = decode_audio(req.audio_base64)
-                inputs = processor(
-                    audio_array,
-                    sampling_rate=sample_rate,
-                    return_tensors="pt"
-                )
-                inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
-                ids    = model.generate(**inputs)
-                out    = processor.batch_decode(ids, skip_special_tokens=True)[0]
-
-            elif task == "audio-classification":
-                if not req.audio_base64:
-                    raise HTTPException(status_code=400,
-                        detail="audio-classification requires 'audio_base64'.")
-                audio_array, sample_rate = decode_audio(req.audio_base64)
-                inputs = processor(
-                    audio_array,
-                    sampling_rate=sample_rate,
-                    return_tensors="pt"
-                )
-                inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
-                logits = model(**inputs).logits
-                out    = model.config.id2label[logits.argmax(-1).item()]
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        log.error(f"Inference error [{req.model}]: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-    return InferenceResponse(
-        model=req.model,
-        task=task,
-        output=out,
-        device=str(DEVICE),
-    )
+# ── Endpoints ─
