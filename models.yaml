@@ -76,21 +76,21 @@ models:
   # ══════════════════════════════════════════════════════════════════════════
 
   # ── Speech to text ────────────────────────────────────────────────────────
-whisper-base:
-  source: hf
-  repo: openai/whisper-base
-  task: automatic-speech-recognition
-  description: Speech recognition (74M)
-  pipeline_kwargs:
-    return_timestamps: true
+  whisper-base:
+    source: hf
+    repo: openai/whisper-base
+    task: automatic-speech-recognition
+    description: Speech recognition (74M)
+    pipeline_kwargs:
+      return_timestamps: true
 
-whisper-small:
-  source: hf
-  repo: openai/whisper-small
-  task: automatic-speech-recognition
-  description: Speech recognition (244M)
-  pipeline_kwargs:
-    return_timestamps: true
+  whisper-small:
+    source: hf
+    repo: openai/whisper-small
+    task: automatic-speech-recognition
+    description: Speech recognition (244M)
+    pipeline_kwargs:
+      return_timestamps: true
 
   wav2vec2-base:
     source: hf
