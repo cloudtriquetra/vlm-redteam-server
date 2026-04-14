@@ -1,69 +1,131 @@
 models:
 
-  # ── HuggingFace Hub ───────────────────────────────────────────────────────
-  # Models are downloaded automatically on first request and cached locally.
+  # ══════════════════════════════════════════════════════════════════════════
+  # VISION MODELS
+  # All vision models use HuggingFace pipeline() automatically.
+  # task values: image-to-text | visual-question-answering |
+  #              image-classification | document-question-answering
+  # ══════════════════════════════════════════════════════════════════════════
+
+  # ── OCR ───────────────────────────────────────────────────────────────────
 
   trocr-base-printed:
     source: hf
     repo: microsoft/trocr-base-printed
-    task: ocr
+    task: image-to-text
     description: Printed text OCR (0.3B) — good default for testing
 
   trocr-large-printed:
     source: hf
     repo: microsoft/trocr-large-printed
-    task: ocr
+    task: image-to-text
     description: Printed text OCR large (0.7B)
 
   trocr-base-handwritten:
     source: hf
     repo: microsoft/trocr-base-handwritten
-    task: ocr
+    task: image-to-text
     description: Handwritten text OCR (0.3B)
+
+  # ── Image captioning ──────────────────────────────────────────────────────
 
   blip-base:
     source: hf
     repo: Salesforce/blip-image-captioning-base
-    task: captioning
+    task: image-to-text
     description: Image captioning base (0.4B)
 
   blip-large:
     source: hf
     repo: Salesforce/blip-image-captioning-large
-    task: captioning
+    task: image-to-text
     description: Image captioning large (1B)
 
   git-base:
     source: hf
     repo: microsoft/git-base
-    task: captioning
+    task: image-to-text
     description: Generative image to text (0.7B)
+
+  # ── Visual question answering ─────────────────────────────────────────────
 
   vilt-vqa:
     source: hf
     repo: dandelin/vilt-b32-finetuned-vqa
-    task: vqa
-    description: Visual question answering
+    task: visual-question-answering
+    description: Visual question answering (0.2B)
+
+  # ── Chat VLMs — larger, need more RAM ─────────────────────────────────────
+
+  llava-1.5-7b:
+    source: hf
+    repo: llava-hf/llava-1.5-7b-hf
+    task: image-to-text
+    description: LLaVA 1.5 vision language model (7B) — needs ~14GB RAM
+
+  moondream2:
+    source: hf
+    repo: vikhyatk/moondream2
+    task: image-to-text
+    description: Moondream 2 lightweight VLM (1.8B) — fast, low RAM
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # AUDIO MODELS
+  # All audio models use HuggingFace pipeline() automatically.
+  # task values: automatic-speech-recognition | audio-classification
+  # ══════════════════════════════════════════════════════════════════════════
+
+  # ── Speech to text ────────────────────────────────────────────────────────
+
+  whisper-base:
+    source: hf
+    repo: openai/whisper-base
+    task: automatic-speech-recognition
+    description: Speech recognition (74M)
+
+  whisper-small:
+    source: hf
+    repo: openai/whisper-small
+    task: automatic-speech-recognition
+    description: Speech recognition (244M)
+
+  wav2vec2-base:
+    source: hf
+    repo: facebook/wav2vec2-base-960h
+    task: automatic-speech-recognition
+    description: Speech recognition (95M)
+
+  # ── Audio classification ───────────────────────────────────────────────────
+
+  audio-classifier:
+    source: hf
+    repo: MIT/ast-finetuned-audioset-10-10-0.4593
+    task: audio-classification
+    description: Audio event classification (87M)
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # CUSTOM MODEL SOURCES
+  # Uncomment and fill in the relevant fields.
+  # ══════════════════════════════════════════════════════════════════════════
 
   # ── Local folder ──────────────────────────────────────────────────────────
-  # Uncomment and set path to load a model saved on disk.
+  # Load a model saved on disk.
   # The folder must contain config.json + model weights (safetensors or bin).
   #
   # my-custom-model:
   #   source: local
   #   path: /absolute/path/to/model/folder
-  #   task: ocr          # ocr | captioning | vqa
+  #   task: image-to-text
   #   description: My locally trained model
 
   # ── URL download ──────────────────────────────────────────────────────────
-  # Server downloads and extracts the archive on first load.
-  # Supports .zip and .tar.gz
+  # Server downloads and extracts on first request. Supports .zip and .tar.gz
   #
   # partner-model:
   #   source: url
   #   url: https://example.com/models/my-model-v1.zip
-  #   task: captioning
-  #   description: Model from partner team
+  #   task: image-to-text
+  #   description: Model received from partner team
 
   # ── AWS S3 ────────────────────────────────────────────────────────────────
   # Requires: pip install boto3
@@ -73,30 +135,20 @@ models:
   #   source: s3
   #   bucket: my-ml-models-bucket
   #   key: models/internal-vlm-v2.tar.gz
-  #   task: captioning
+  #   task: image-to-text
   #   description: Internal model from S3
 
-  # ── Audio models ──────────────────────────────────────────────────────────
-  whisper-base:
-    source: hf
-    repo: openai/whisper-base
-    task: speech-to-text
-    description: Speech recognition (74M)
-
-  whisper-small:
-    source: hf
-    repo: openai/whisper-small
-    task: speech-to-text
-    description: Speech recognition (244M)
-
-  wav2vec2-base:
-    source: hf
-    repo: facebook/wav2vec2-base-960h
-    task: speech-to-text
-    description: Speech recognition (95M)
-
-  audio-classifier:
-    source: hf
-    repo: MIT/ast-finetuned-audioset-10-10-0.4593
-    task: audio-classification
-    description: Audio event classification
+  # ══════════════════════════════════════════════════════════════════════════
+  # CUSTOM LOADER FALLBACK
+  # Only needed for models that do not work with HuggingFace pipeline().
+  # Set custom_loader: true and use the legacy task name.
+  # Legacy task names: ocr | captioning | vqa |
+  #                    speech-to-text | audio-classification
+  # ══════════════════════════════════════════════════════════════════════════
+  #
+  # unusual-model:
+  #   source: hf
+  #   repo: some-org/unusual-model
+  #   task: ocr
+  #   custom_loader: true
+  #   description: Model that needs legacy loader
